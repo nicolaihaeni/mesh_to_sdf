@@ -6,6 +6,7 @@ import argparse
 import h5py
 import numpy as np
 import trimesh
+
 import open3d as o3d
 
 from mesh_to_sdf.utils import scale_to_unit_sphere
@@ -18,14 +19,15 @@ categories = {
     "plane": "02691156",
     "table": "04379243",
 }
-split_dir = "/home/isleri/haeni001/code/DIF-Net/split/"
+key_list = list(categories.keys())
+val_list = list(categories.values())
 
 
 def main(args):
     # Load all the split files
     filenames = []
     for cat in categories:
-        with open(os.path.join(split_dir, f"{cat}.json"), "r") as f:
+        with open(os.path.join(args.split_dir, f"{cat}.json"), "r") as f:
             data = json.load(f)
             for mode in ["test", "train"]:
                 for filename in data[mode][categories[cat]]:
@@ -34,6 +36,18 @@ def main(args):
     chunk = np.array_split(filenames, args.num_procs)[args.rank]
 
     for filename in filenames:
+        # Check if we can skip this instance
+        category, fname = filename.split("/")
+        category = key_list[val_list.index(category)]
+        out_path = os.path.join(args.out_dir, category, fname)
+        out_filename = os.path.join(out_path, f"{fname}.h5")
+
+        if os.path.exists(out_filename):
+            continue
+
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
         mesh = trimesh.load(
             os.path.join(args.mesh_dir, filename, "models", "model_normalized.obj")
         )
@@ -57,7 +71,7 @@ def main(args):
             free_points, use_depth_buffer=True, sample_count=10000000
         )
 
-        # Visualize
+        # # Visualize
         pcd, free_pcd = o3d.geometry.PointCloud(), o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(surface_points)
         pcd.normals = o3d.utility.Vector3dVector(surface_normals)
@@ -72,6 +86,22 @@ def main(args):
 
         o3d.visualization.draw_geometries([pcd, free_pcd])
 
+        surface_data = np.concatenate([surface_points, surface_normals], axis=-1)
+        free_data = np.concatenate([free_points, free_points_sdf[:, None]], axis=-1)
+
+        h5file = h5py.File(out_filename, "w")
+        h5file.create_dataset(
+            "free_pts",
+            data=free_data,
+            compression="gzip",
+        )
+        h5file.create_dataset(
+            "surface_pts",
+            data=surface_data,
+            compression="gzip",
+        )
+        h5file.close()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -82,7 +112,13 @@ if __name__ == "__main__":
     parser.add_argument("--out_dir", default="./out", type=str, help="output directory")
     parser.add_argument(
         "--mesh_dir",
-        default="/home/isleri/haeni001/data/ShapeNetCore.v2/",
+        default="/home/nicolai/phd/data/ShapeNetCore.v2/",
+        type=str,
+        help="mesh directory",
+    )
+    parser.add_argument(
+        "--split_dir",
+        default="/home/nicolai/phd/code/DIF-Net/split/",
         type=str,
         help="mesh directory",
     )
