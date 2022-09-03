@@ -1,13 +1,13 @@
 import os
 
-# os.environ["PYOPENGL_PLATFORM"] = "egl"
+os.environ["PYOPENGL_PLATFORM"] = "egl"
 import json
 import argparse
 import h5py
 import numpy as np
 import trimesh
 
-import open3d as o3d
+# import open3d as o3d
 
 from mesh_to_sdf.utils import scale_to_unit_sphere
 from mesh_to_sdf import get_surface_point_cloud, surface_point_cloud
@@ -71,20 +71,20 @@ def main(args):
             free_points, use_depth_buffer=True, sample_count=10000000
         )
 
-        # # Visualize
-        pcd, free_pcd = o3d.geometry.PointCloud(), o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(surface_points)
-        pcd.normals = o3d.utility.Vector3dVector(surface_normals)
-        colors = np.zeros_like(surface_points)
-        colors[:, 0] = 1
-        pcd.colors = o3d.utility.Vector3dVector(colors)
+        # # # Visualize
+        # pcd, free_pcd = o3d.geometry.PointCloud(), o3d.geometry.PointCloud()
+        # pcd.points = o3d.utility.Vector3dVector(surface_points)
+        # pcd.normals = o3d.utility.Vector3dVector(surface_normals)
+        # colors = np.zeros_like(surface_points)
+        # colors[:, 0] = 1
+        # pcd.colors = o3d.utility.Vector3dVector(colors)
 
-        free_pcd.points = o3d.utility.Vector3dVector(free_points)
-        colors = np.zeros_like(free_points)
-        colors[:, 1] = 1
-        free_pcd.colors = o3d.utility.Vector3dVector(colors)
+        # free_pcd.points = o3d.utility.Vector3dVector(free_points)
+        # colors = np.zeros_like(free_points)
+        # colors[:, 1] = 1
+        # free_pcd.colors = o3d.utility.Vector3dVector(colors)
 
-        o3d.visualization.draw_geometries([pcd, free_pcd])
+        # o3d.visualization.draw_geometries([pcd, free_pcd])
 
         surface_data = np.concatenate([surface_points, surface_normals], axis=-1)
         free_data = np.concatenate([free_points, free_points_sdf[:, None]], axis=-1)
