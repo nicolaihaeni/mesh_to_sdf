@@ -1,6 +1,6 @@
 import os
 
-os.environ["PYOPENGL_PLATFORM"] = "egl"
+os.environ["PYOPENGL_PLATFORM"] = "osmesa"
 import json
 import argparse
 import h5py
@@ -30,12 +30,12 @@ def main(args):
         with open(os.path.join(args.split_dir, f"{cat}.json"), "r") as f:
             data = json.load(f)
             for mode in ["test", "train"]:
-                for filename in data[mode][categories[cat]]:
+                for filename in data[mode][cat]:
                     filenames.append(f"{categories[cat]}/{filename}")
 
     chunk = np.array_split(filenames, args.num_procs)[args.rank]
 
-    for filename in filenames:
+    for ii, filename in enumerate(chunk):
         # Check if we can skip this instance
         category, fname = filename.split("/")
         category = key_list[val_list.index(category)]
@@ -43,13 +43,17 @@ def main(args):
         out_filename = os.path.join(out_path, f"{fname}.h5")
 
         if os.path.exists(out_filename):
+            print(f"Skipping: {out_filename}")
             continue
 
         if not os.path.exists(out_path):
             os.makedirs(out_path)
 
+        print(f"Processing {ii}/{len(chunk)} files")
+
         mesh = trimesh.load(
-            os.path.join(args.mesh_dir, filename, "models", "model_normalized.obj")
+            os.path.join(args.mesh_dir, filename, "models", "model_normalized.obj"),
+            force="mesh",
         )
 
         if isinstance(mesh, trimesh.Scene):
@@ -109,18 +113,25 @@ if __name__ == "__main__":
         "--num_procs", default=1, type=int, help="number of parallel processes started"
     )
     parser.add_argument("--rank", default=0, type=int, help="rank of current process")
-    parser.add_argument("--out_dir", default="./out", type=str, help="output directory")
+    parser.add_argument(
+        "--out_dir",
+        default="/home/isleri/haeni001/data/dif",
+        type=str,
+        help="output directory",
+    )
     parser.add_argument(
         "--mesh_dir",
-        default="/home/nicolai/phd/data/ShapeNetCore.v2/",
+        default="/home/isleri/haeni001/data/ShapeNetCore.v2/",
         type=str,
         help="mesh directory",
     )
     parser.add_argument(
         "--split_dir",
-        default="/home/nicolai/phd/code/DIF-Net/split/",
+        default="/home/isleri/haeni001/code/DIF-Net/split/",
         type=str,
-        help="mesh directory",
+        help="split directory",
     )
     args = parser.parse_args()
+
+    print(f"Running process {args.rank} of {args.num_procs}")
     main(args)
