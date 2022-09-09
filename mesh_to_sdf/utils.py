@@ -10,8 +10,8 @@ def scale_to_unit_sphere(mesh):
     vertices = mesh.vertices - mesh.bounding_box.centroid
     distances = np.linalg.norm(vertices, axis=1)
     vertices /= np.max(distances)
-
-    return trimesh.Trimesh(vertices=vertices, faces=mesh.faces)
+    mesh.vertices = vertices
+    return mesh
 
 
 def scale_to_unit_cube(mesh):
@@ -45,7 +45,7 @@ def check_voxels(voxels):
     d3 = (block - voxels[:-1, :-1, 1:]).reshape(-1)
 
     max_distance = max(np.max(d1), np.max(d2), np.max(d3))
-    return max_distance < 2.0 / voxels.shape[0] * 3 ** 0.5 * 1.1
+    return max_distance < 2.0 / voxels.shape[0] * 3**0.5 * 1.1
 
 
 def sample_uniform_points_in_unit_sphere(amount):

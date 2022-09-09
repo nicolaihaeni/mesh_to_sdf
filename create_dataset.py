@@ -1,6 +1,7 @@
 import os
 
-os.environ["PYOPENGL_PLATFORM"] = "osmesa"
+# os.environ["PYOPENGL_PLATFORM"] = "osmesa"
+# os.environ["PYOPENGL_PLATFORM"] = "egl"
 import json
 import h5py
 import random
@@ -14,10 +15,12 @@ from mesh_to_sdf import get_surface_point_cloud, surface_point_cloud
 from pytorch3d.datasets import ShapeNetCore
 import pyrender
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
+np.random.seed(0)
 
 SHAPENET_PATH = "/home/isleri/haeni001/data/ShapeNetCore.v2"
+# SHAPENET_PATH = "/home/nicolai/phd/data/ShapeNetCore.v2"
 categories = {
     "car": "02958343",
     "chair": "03001627",
@@ -36,7 +39,7 @@ def main(args):
         with open(os.path.join(args.split_dir, f"{cat}.json"), "r") as f:
             data = json.load(f)
             for mode in ["test", "train"]:
-                for filename in data[mode][cat]:
+                for filename in data[mode]:
                     filenames.append(f"{categories[cat]}/{filename}")
 
     chunk = np.array_split(filenames, args.num_procs)[args.rank]
@@ -57,13 +60,9 @@ def main(args):
         except Exception as e:
             print("Error in loading mesh: {fname}")
 
-        if isinstance(mesh, trimesh.Scene):
-            mesh = mesh.dump().sum()
-        if not isinstance(mesh, trimesh.Trimesh):
-            raise TypeError("The mesh parameter must be a trimesh mesh.")
-
         # Normalize the mesh in sphere of radius 1/1.03
         mesh = scale_to_unit_sphere(mesh)
+        mesh.export("./mesh.obj")
 
         # Create SDF data
         if not os.path.exists(out_filename):
@@ -101,33 +100,32 @@ def main(args):
             print(f"Skipping: {out_filename}")
         # Render RGBD images
         if not os.path.exists(out_rgbd_path):
+            mesh = trimesh.load("./mesh.obj")
             cam_locations = utils.sample_spherical(30, 3.0)
             obj_location = np.zeros((1, 3))
             cv_poses = utils.look_at(cam_locations, obj_location)
+
+            cv_poses = [
+                f @ utils.sample_roll_matrix(np.random.uniform(-1, 1, 1) * np.pi)
+                for f in cv_poses
+            ]
+
             cam_locations = [utils.cv_cam2world_to_bcam2world(m) for m in cv_poses]
             image_size = (256, 256)
+            K = np.array([[262.5, 0.0, 128.0], [0.0, 262.5, 128.0], [0.0, 0.0, 1.0]])
             camera = pyrender.IntrinsicsCamera(
                 fx=262.5, fy=262.5, cx=128.0, cy=128.0, znear=0.01, zfar=100
             )
 
-            mesh = pyrender.Mesh.from_trimesh(mesh)
-            scene = pyrender.Scene()
-            scene.add(mesh)
-            pyrender.Viewer(scene, use_raymond_lighting=True)
+            scene = pyrender.Scene.from_trimesh_scene(
+                trimesh.Scene(mesh), ambient_light=(1, 1, 1)
+            )
 
             rgbs = []
             depths = []
             masks = []
             for ii, w2c in enumerate(cam_locations):
                 # Add camera roll
-                roll_matrix = utils.sample_roll_matrix(
-                    np.random.uniform(-1, 1, 1) * np.pi
-                )
-                w2c = roll_matrix @ w2c
-
-                if ii == 0:
-                    w2c0 = np.array(utils.get_world2cam_from_blender_cam(w2c))
-
                 if ii == 0:
                     cam_node = scene.add(camera, pose=np.array(w2c))
                 else:
@@ -139,53 +137,61 @@ def main(args):
                 )
 
                 mask = depth != 0
-                depth[mask == 0.0] = 100
+                depth[mask == 0.0] = 10
 
                 rgbs.append(color)
                 depths.append(depth)
                 masks.append(mask)
                 r.delete()
 
-            fig, ax = plt.subplots(1, 3)
-            ax[0].imshow(rgbs[0])
-            ax[1].imshow(depths[0], cmap="plasma")
-            ax[2].imshow(masks[0], cmap="plasma")
-            plt.show()
+            # fig, ax = plt.subplots(1, 3)
+            # ax[0].imshow(rgbs[0])
+            # ax[1].imshow(depths[0], cmap="plasma")
+            # ax[2].imshow(masks[0], cmap="plasma")
+            # plt.show()
 
-            rgbs = np.stack([r for r in rgbs])
+            images = np.stack([r for r in rgbs])
             depths = np.stack([r for r in depths])
             masks = np.stack([r for r in masks])
+            cam2world = np.stack([r for r in cv_poses])
+
             hf = h5py.File(out_rgbd_path, "w")
             hf.create_dataset("rgb", data=rgbs, compression="gzip", dtype="f")
             hf.create_dataset("depth", data=depths, compression="gzip", dtype="f")
             hf.create_dataset("mask", data=masks, compression="gzip", dtype="f")
+            hf.create_dataset(
+                "cam2world", data=cam2world, compression="gzip", dtype="f"
+            )
+            hf.create_dataset("K", data=K, dtype="f")
             hf.close()
 
-            # # Visualize
+            # Visualize
+            # import open3d as o3d
+
+            # with h5py.File(out_filename, "r") as hf:
+            # surface_points = hf["surface_pts"][:, :3]
+
             # pcd = o3d.geometry.PointCloud()
             # pcd.points = o3d.utility.Vector3dVector(surface_points)
-            # pcd.normals = o3d.utility.Vector3dVector(surface_normals)
-            # colors = np.zeros_like(surface_points)
-            # colors[:, 0] = 1
-            # pcd.colors = o3d.utility.Vector3dVector(colors)
+            # pcd.paint_uniform_color(np.array([1, 0, 0]))
 
             # depth = depths[0]
-            # depth[depth == 100] = np.inf
-            # u, v = np.where(depth != np.inf)
-            # x = (u - 128) / 262.5 * depth[u, v]
-            # y = (v - 128) / 262.5 * depth[u, v]
-            # z = depth[u, v]
-            # points = np.stack([x, y, z], axis=-1)
+            # depth[depth == 10] = np.inf
 
-            # pcd_part = o3d.geometry.PointCloud()
-            # pcd_part.points = o3d.utility.Vector3dVector(points)
-            # colors = np.zeros_like(points)
-            # colors[:, 1] = 1
-            # pcd_part.colors = o3d.utility.Vector3dVector(colors)
+            # u, v = np.where(depth != np.inf)
+            # y = depth[u, v] * ((u - 128.0) / 262.5)
+            # x = depth[u, v] * ((v - 128.0) / 262.5)
+            # z = depth[u, v]
+            # pts = np.stack([x, y, z], axis=-1)
+
+            # pcd_part = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pts))
+            # pcd_part.paint_uniform_color(np.array([0, 1, 0]))
+            # pcd_part.transform(cv_poses[0])
 
             # axis = o3d.geometry.TriangleMesh.create_coordinate_frame()
-            # pcd_part.transform(np.linalg.inv(w2c0))
-            # o3d.visualization.draw_geometries([pcd, pcd_part, axis])
+            # camera = o3d.geometry.TriangleMesh.create_coordinate_frame()
+            # camera.transform(cv_poses[0])
+            # o3d.visualization.draw_geometries([pcd, axis, pcd_part, camera])
 
 
 if __name__ == "__main__":
@@ -216,3 +222,4 @@ if __name__ == "__main__":
 
     print(f"Running process {args.rank} of {args.num_procs}")
     main(args)
+    os.remove("./model.obj")
