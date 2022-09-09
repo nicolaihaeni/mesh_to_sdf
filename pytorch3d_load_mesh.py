@@ -22,6 +22,7 @@ categories = {
     "table": "04379243",
 }
 
+count = 0
 for category in categories.keys():
     with open(os.path.join(split_file_path, category + ".json"), "r") as infile:
         data = json.load(infile)
@@ -29,6 +30,16 @@ for category in categories.keys():
     for mode in modes:
         split_data = data[mode]
         for filename in split_data:
+            out_path = os.path.join(
+                SHAPENET_PATH,
+                categories[category],
+                filename,
+                "models",
+                "model_trimesh.obj",
+            )
+            if os.path.exists(out_path):
+                continue
+
             idx = model_ids.index(filename)
             dictionary = shapenet_dataset[idx]
             verts, faces = (
@@ -56,12 +67,8 @@ for category in categories.keys():
                 mesh = trimesh.Trimesh(vertices=verts, faces=faces)
 
             # Trimesh save a copy of the mesh to file
-            out_path = os.path.join(
-                SHAPENET_PATH,
-                categories[category],
-                filename,
-                "models",
-                "model_trimesh.obj",
-            )
-
             mesh.export(out_path)
+
+            if count % 100 == 0:
+                print(f"Finished {count} models")
+            count += 1
