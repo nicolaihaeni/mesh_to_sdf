@@ -11,11 +11,13 @@ import trimesh
 import utils
 from mesh_to_sdf.utils import scale_to_unit_sphere
 from mesh_to_sdf import get_surface_point_cloud, surface_point_cloud
+from pytorch3d.datasets import ShapeNetCore
 import pyrender
 
 import matplotlib.pyplot as plt
 
 
+SHAPENET_PATH = "/home/isleri/haeni001/data/ShapeNetCore.v2"
 categories = {
     "car": "02958343",
     "chair": "03001627",
@@ -28,6 +30,7 @@ val_list = list(categories.values())
 
 def main(args):
     # Load all the split files
+    shapenet_dataset = ShapeNetCore(SHAPENET_PATH, version=2)
     filenames = []
     for cat in categories:
         with open(os.path.join(args.split_dir, f"{cat}.json"), "r") as f:
@@ -49,10 +52,10 @@ def main(args):
         if not os.path.exists(out_path):
             os.makedirs(out_path)
 
-        mesh = trimesh.load(
-            os.path.join(args.mesh_dir, filename, "models", "model_normalized.obj"),
-            force="mesh",
-        )
+        try:
+            mesh = utils.load_mesh_with_color(shapenet_dataset, fname)
+        except Exception as e:
+            print("Error in loading mesh: {fname}")
 
         if isinstance(mesh, trimesh.Scene):
             mesh = mesh.dump().sum()
@@ -106,14 +109,6 @@ def main(args):
             camera = pyrender.IntrinsicsCamera(
                 fx=262.5, fy=262.5, cx=128.0, cy=128.0, znear=0.01, zfar=100
             )
-
-            mesh = trimesh.load_mesh(
-                os.path.join(args.mesh_dir, filename, "models", "model_normalized.obj"),
-            )
-            if isinstance(mesh, trimesh.Scene):
-                mesh = mesh.dump().sum()
-            if not isinstance(mesh, trimesh.Trimesh):
-                raise TypeError("The mesh parameter must be a trimesh mesh.")
 
             mesh = pyrender.Mesh.from_trimesh(mesh)
             scene = pyrender.Scene()

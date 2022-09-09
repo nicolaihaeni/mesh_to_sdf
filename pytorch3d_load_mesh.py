@@ -6,12 +6,12 @@ import trimesh
 import torch
 from pytorch3d.datasets import ShapeNetCore
 from pytorch3d.structures import Meshes
-from pytorch3d.renderer.mesh import TexturesAtlas, TexturesVertex
+from pytorch3d.renderer.mesh import TexturesAtlas
 
 
 modes = ["train", "test"]
-split_file_path = "/home/nicolai/phd/code/DIF-Net/split/"
-SHAPENET_PATH = "/home/nicolai/phd/data/ShapeNetCore.v2"
+split_file_path = "/home/isleri/haeni001/code/DIF-Net/split/"
+SHAPENET_PATH = "/home/isleri/haeni001/data/ShapeNetCore.v2"
 shapenet_dataset = ShapeNetCore(SHAPENET_PATH, version=2)
 model_ids = shapenet_dataset.model_ids
 
@@ -38,6 +38,7 @@ for category in categories.keys():
                 "model_trimesh.obj",
             )
             if os.path.exists(out_path):
+                print(f"Model {out_path} exists. Skipping...")
                 continue
 
             idx = model_ids.index(filename)

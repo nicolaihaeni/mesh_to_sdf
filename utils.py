@@ -1,5 +1,38 @@
+import trimesh
 import numpy as np
 from mathutils import Matrix, Vector
+
+import torch
+from pytorch3d.structures import Meshes
+from pytorch3d.renderer.mesh import TexturesAtlas
+
+
+def load_mesh_with_color(dataset, filename):
+    model_ids = dataset.model_ids
+    idx = model_ids.index(filename)
+    dictionary = dataset[idx]
+    verts, faces = (
+        dictionary["verts"].numpy(),
+        dictionary["faces"].numpy(),
+    )
+
+    if "textures" in dictionary:
+        textures = TexturesAtlas(atlas=dictionary["textures"].unsqueeze(0))
+        mesh = Meshes(
+            verts=[dictionary["verts"]],
+            faces=[dictionary["faces"]],
+            textures=textures,
+        )
+        verts_colors_packed = torch.ones_like(mesh.verts_packed())
+        verts_colors_packed[
+            mesh.faces_packed()
+        ] = mesh.textures.faces_verts_textures_packed()
+
+        verts_colors = verts_colors_packed.squeeze(0).numpy()
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_colors=verts_colors)
+    else:
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+    return mesh
 
 
 def normalize(vec):
