@@ -20,6 +20,7 @@ def sample_roll_matrix(theta):
 def sample_spherical(n, radius=1.0):
     xyz = np.random.normal(size=(n, 3))
     xyz = normalize(xyz) * radius
+    xyz[:, 1] = abs(xyz[:, 1])
     return xyz
 
 

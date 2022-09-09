@@ -13,6 +13,8 @@ from mesh_to_sdf.utils import scale_to_unit_sphere
 from mesh_to_sdf import get_surface_point_cloud, surface_point_cloud
 import pyrender
 
+import matplotlib.pyplot as plt
+
 
 categories = {
     "car": "02958343",
@@ -105,9 +107,18 @@ def main(args):
                 fx=262.5, fy=262.5, cx=128.0, cy=128.0, znear=0.01, zfar=100
             )
 
-            scene = pyrender.Scene.from_trimesh_scene(
-                trimesh.Scene(mesh), ambient_light=(1, 1, 1)
+            mesh = trimesh.load_mesh(
+                os.path.join(args.mesh_dir, filename, "models", "model_normalized.obj"),
             )
+            if isinstance(mesh, trimesh.Scene):
+                mesh = mesh.dump().sum()
+            if not isinstance(mesh, trimesh.Trimesh):
+                raise TypeError("The mesh parameter must be a trimesh mesh.")
+
+            mesh = pyrender.Mesh.from_trimesh(mesh)
+            scene = pyrender.Scene()
+            scene.add(mesh)
+            pyrender.Viewer(scene, use_raymond_lighting=True)
 
             rgbs = []
             depths = []
@@ -140,12 +151,11 @@ def main(args):
                 masks.append(mask)
                 r.delete()
 
-            # for rgb, depth, mask in zip(rgbs, depths, masks):
-            # fig, ax = plt.subplots(1, 3)
-            # ax[0].imshow(rgb)
-            # ax[1].imshow(depth, cmap="plasma")
-            # ax[2].imshow(mask, cmap="plasma")
-            # plt.show()
+            fig, ax = plt.subplots(1, 3)
+            ax[0].imshow(rgbs[0])
+            ax[1].imshow(depths[0], cmap="plasma")
+            ax[2].imshow(masks[0], cmap="plasma")
+            plt.show()
 
             rgbs = np.stack([r for r in rgbs])
             depths = np.stack([r for r in depths])
