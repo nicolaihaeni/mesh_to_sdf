@@ -1,6 +1,6 @@
 import os
 
-# os.environ["PYOPENGL_PLATFORM"] = "egl"
+os.environ["PYOPENGL_PLATFORM"] = "osmesa"
 import json
 import h5py
 import random
